@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>หลังร้าน – หยิบ แพ็ค จ่าหน้า</title>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0}
+.tab{background:var(--soft);border:1px solid var(--line);color:var(--ink);padding:9px 18px;border-radius:999px;cursor:pointer;font:inherit}
+.tab[aria-pressed=true]{background:var(--honey);color:#2a1b00;border-color:var(--honey)}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+.labels{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:14px}
+.label{border:2px solid #000;padding:14px 16px;background:#fff;color:#000;break-inside:avoid;font-size:15px;line-height:1.5}
+.label .to{font-size:20px;font-weight:700}.label .from{border-bottom:1px dashed #000;padding-bottom:8px;margin-bottom:8px;font-size:13px}
+.badge{font-size:.8rem;padding:2px 10px;border-radius:99px;background:var(--soft)}
+@media print{body{background:#fff}.noprint{display:none!important}.labels{grid-template-columns:1fr 1fr;gap:8px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="noprint" style="margin-top:28px">หลังร้าน</h1>
+  <div class="bar noprint">
+    <input id="key" type="password" placeholder="รหัสผู้ดูแล" aria-label="รหัสผู้ดูแล">
+    <button class="btn" id="load">โหลดออเดอร์</button>
+    <span id="st"></span>
+  </div>
+  <div class="bar noprint" id="tabs" hidden>
+    <button class="tab" data-v="pick" aria-pressed="true">1. ใบหยิบสินค้า</button>
+    <button class="tab" data-v="pack" aria-pressed="false">2. รายการแพ็ค</button>
+    <button class="tab" data-v="label" aria-pressed="false">3. จ่าหน้าพัสดุ</button>
+    <button class="btn" onclick="print()">พิมพ์</button>
+  </div>
+  <div id="out"></div>
+</div>
+<script src="config.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let orders = [], view = 'pick';
+$('#key').value = sessionStorage.getItem('k') || '';
+
+async function loadOrders() {
+  const k = $('#key').value; $('#st').textContent = 'กำลังโหลด…';
+  try {
+    const d = await (await fetch(`${CONFIG.API_URL}?action=orders&key=${encodeURIComponent(k)}`)).json();
+    if (d.error) throw new Error(d.error === 'unauthorized' ? 'รหัสไม่ถูกต้อง' : d.error);
+    orders = d; sessionStorage.setItem('k', k); $('#tabs').hidden = false; $('#st').textContent = `ออเดอร์ทั้งหมด ${d.length}`; draw();
+  } catch (e) { $('#st').textContent = 'โหลดไม่สำเร็จ: ' + e.message; }
+}
+async function setStatus(id, status) {
+  await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'status', key: $('#key').value, order_id: id, status }) });
+  loadOrders();
+}
+function draw() {
+  const todo = orders.filter(o => o.status === 'new'), packed = orders.filter(o => o.status === 'packed');
+  let h = '';
+  if (view === 'pick') {
+    const t = {}; todo.forEach(o => o.items.forEach(i => { t[i.sku] ??= { name: i.name, q: 0 }; t[i.sku].q += i.qty; }));
+    h = `<h2>ใบหยิบสินค้า (${todo.length} ออเดอร์รอแพ็ค)</h2><table><tr><th>SKU</th><th>สินค้า</th><th>จำนวนที่ต้องหยิบ</th></tr>` +
+      (Object.entries(t).map(([s, v]) => `<tr><td>${esc(s)}</td><td>${esc(v.name)}</td><td><b>${v.q}</b></td></tr>`).join('') || '<tr><td colspan=3>ไม่มีออเดอร์ค้าง</td></tr>') + '</table>';
+  }
+  if (view === 'pack') {
+    h = `<h2>รายการแพ็ค</h2>` + (todo.map(o => `<div class="card" style="padding:16px;margin-bottom:14px">
+      <b>${esc(o.order_id)}</b> – ${esc(o.name)} <span class="badge">รอแพ็ค</span>
+      <ul>${o.items.map(i => `<li>☐ ${esc(i.sku)} ${esc(i.name)} × <b>${i.qty}</b></li>`).join('')}</ul>
+      <button class="btn noprint" onclick="setStatus('${esc(o.order_id)}','packed')">แพ็คเสร็จแล้ว</button></div>`).join('') || '<p>ไม่มีออเดอร์รอแพ็ค</p>');
+  }
+  if (view === 'label') {
+    const L = [...todo, ...packed], S = CONFIG.SENDER;
+    h = `<h2 class="noprint">จ่าหน้าพัสดุ (${L.length})</h2><div class="labels">` + L.map(o => `<div class="label">
+      <div class="from">ผู้ส่ง: ${esc(S.name)} โทร ${esc(S.phone)}<br>${esc(S.address)}</div>
+      <div class="to">ผู้รับ: ${esc(o.name)}</div><div>โทร ${esc(o.phone)}</div><div>${esc(o.address)}</div>
+      <div style="margin-top:8px;font-size:13px">ออเดอร์ ${esc(o.order_id)} | ${o.items.map(i => esc(i.sku) + '×' + i.qty).join(', ')}</div>
+      <button class="noprint" onclick="setStatus('${esc(o.order_id)}','shipped')">ส่งแล้ว</button></div>`).join('') + '</div>';
+  }
+  $('#out').innerHTML = h;
+}
+$('#load').onclick = loadOrders;
+$('#tabs').addEventListener('click', e => { const b = e.target.closest('.tab'); if (!b) return; view = b.dataset.v;
+  document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-pressed', t === b)); draw(); });
+</script>
+</body></html>

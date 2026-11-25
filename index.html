@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>น้ำผึ้งบ้านสวน – น้ำผึ้งแท้ ไม่ผสม ส่งตรงจากผู้เลี้ยง</title>
+<meta name="description" content="น้ำผึ้งดอกไม้ป่าและน้ำผึ้งดอกลำไย เก็บจากรังเลี้ยงเอง ไม่ผสมน้ำตาล สั่งออนไลน์ ส่งทั่วไทย">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <svg class="hex" viewBox="0 0 200 200" fill="none" stroke="#e2a42b" stroke-width="3" aria-hidden="true"><path d="M60 20l30 17v35L60 89 30 72V37zM120 55l30 17v35l-30 17-30-17V72zM60 90l30 17v35l-30 17-30-17v-35zM120 125l30 17v35l-30 17-30-17v-35z"/></svg>
+  <div class="wrap">
+    <h1>น้ำผึ้งแท้ จากรังของเราเอง</h1>
+    <p>ไม่ผสมน้ำตาล ไม่ปรุงแต่ง เก็บและบรรจุขวดเองทุกล็อต เลือกได้ 2 รสชาติ ส่งถึงบ้านทั่วไทย</p>
+    <a class="btn" href="#order">สั่งซื้อเลย</a>
+  </div>
+</header>
+
+<main>
+<section><div class="wrap">
+  <h2>เลือกน้ำผึ้งที่ใช่</h2>
+  <div class="grid" id="products" aria-live="polite">กำลังโหลดสินค้า…</div>
+</div></section>
+
+<section style="background:var(--soft)"><div class="wrap">
+  <h2>ทำไมต้องน้ำผึ้งของเรา</h2>
+  <div class="why">
+    <div><h3>ไม่ผสม</h3><p>น้ำผึ้งล้วน 100% ไม่เติมน้ำเชื่อมหรือสารแต่งสี</p></div>
+    <div><h3>รู้ที่มา</h3><p>เก็บจากรังเลี้ยงในสวนของเราเอง ระบุล็อตผลิตบนฉลาก</p></div>
+    <div><h3>แพ็คแน่น ส่งไว</h3><p>ห่อกันกระแทก ส่งภายใน 1–2 วันทำการ</p></div>
+  </div>
+</div></section>
+
+<section id="order"><div class="wrap">
+  <h2>กรอกข้อมูลจัดส่ง</h2>
+  <form id="f">
+    <div class="sum" id="sum">ยังไม่ได้เลือกสินค้า</div>
+    <label>ชื่อผู้รับ<input name="name" required autocomplete="name"></label>
+    <label>เบอร์โทร<input name="phone" required inputmode="tel" pattern="0[0-9]{8,9}" title="เบอร์โทร 9–10 หลัก ขึ้นต้นด้วย 0" autocomplete="tel"></label>
+    <label>ที่อยู่จัดส่ง (บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์)<textarea name="address" rows="3" required autocomplete="street-address"></textarea></label>
+    <button class="btn" id="go" type="submit">ยืนยันการสั่งซื้อ</button>
+    <div id="msg" role="status"></div>
+  </form>
+</div></section>
+</main>
+<footer><div class="wrap" id="foot"></div></footer>
+
+<script src="config.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const cart = {}; let products = [];
+$('#foot').textContent = '© ' + CONFIG.SHOP_NAME;
+const money = n => Number(n).toLocaleString('th-TH');
+
+async function load() {
+  try {
+    const r = await fetch(CONFIG.API_URL + '?action=products');
+    products = await r.json();
+    if (!Array.isArray(products)) throw 0;
+  } catch { products = CONFIG.FALLBACK_PRODUCTS; }
+  render();
+}
+function render() {
+  $('#products').innerHTML = products.map(p => `
+    <article class="card">
+      <img src="${CONFIG.IMAGE_BASE}${p.image}" alt="${p.name} ${p.size}" loading="lazy">
+      <div class="b">
+        <h3>${p.name} <small>${p.size}</small></h3>
+        <p>${p.desc}</p>
+        <div class="price">฿${money(p.price)}</div>
+        <div class="qty">
+          <button type="button" aria-label="ลด ${p.name}" data-s="${p.sku}" data-d="-1">−</button>
+          <output id="q-${p.sku}">0</output>
+          <button type="button" aria-label="เพิ่ม ${p.name}" data-s="${p.sku}" data-d="1">+</button>
+          <small>${p.stock > 0 ? 'เหลือ ' + p.stock : 'สินค้าหมด'}</small>
+        </div>
+      </div>
+    </article>`).join('');
+}
+$('#products').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const p = products.find(x => x.sku === b.dataset.s);
+  const q = Math.max(0, Math.min(p.stock, (cart[p.sku] || 0) + +b.dataset.d));
+  cart[p.sku] = q; $('#q-' + p.sku).textContent = q; summary();
+});
+function summary() {
+  const L = products.filter(p => cart[p.sku] > 0);
+  const t = L.reduce((s, p) => s + p.price * cart[p.sku], 0);
+  $('#sum').innerHTML = L.length ? L.map(p => `${p.name} ${p.size} × ${cart[p.sku]}`).join('<br>') + `<br><b>รวม ฿${money(t)}</b> (ยังไม่รวมค่าส่ง)` : 'ยังไม่ได้เลือกสินค้า';
+}
+$('#f').addEventListener('submit', async e => {
+  e.preventDefault();
+  const msg = $('#msg'), items = Object.entries(cart).filter(([, q]) => q > 0).map(([sku, qty]) => ({ sku, qty }));
+  if (!items.length) { msg.className = 'msg err'; msg.textContent = 'เลือกสินค้าอย่างน้อย 1 ชิ้นก่อนยืนยัน'; return; }
+  const fd = new FormData(e.target), btn = $('#go'); btn.disabled = true; btn.textContent = 'กำลังส่ง…';
+  try {
+    // ใช้ text/plain เพื่อเลี่ยง CORS preflight ของ Apps Script
+    const r = await fetch(CONFIG.API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'create', name: fd.get('name'), phone: fd.get('phone'), address: fd.get('address'), items }) });
+    const d = await r.json(); if (d.error) throw new Error(d.error);
+    msg.className = 'msg ok'; msg.innerHTML = `รับออเดอร์แล้ว เลขที่ <b>${d.order_id}</b> ยอดรวม ฿${money(d.total)} เราจะติดต่อกลับเพื่อแจ้งค่าส่งและเลขบัญชี`;
+    e.target.reset(); Object.keys(cart).forEach(k => delete cart[k]); load(); summary();
+  } catch (err) { msg.className = 'msg err'; msg.textContent = 'ส่งไม่สำเร็จ: ' + err.message + ' ลองใหม่อีกครั้ง'; }
+  btn.disabled = false; btn.textContent = 'ยืนยันการสั่งซื้อ';
+});
+load();
+</script>
+</body>
+</html>
